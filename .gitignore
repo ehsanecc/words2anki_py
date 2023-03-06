@@ -1,0 +1,7 @@
+media
+sample
+temp
+words.txt
+.vscode
+**.pyc
+**/__pycache__
