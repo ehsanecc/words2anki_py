@@ -1,0 +1,10 @@
+1. Add support to other websites like "Cambridge Online Dictionary", "Oxford Online Dictionary" and ...
+2. Add support to use wordhippo or ludwig to add more examples per word
+3. Make it multithreaded
+4. Optimize code
+5. Add more parameters and arguments to "Make it flexible"
+6. Use OS temp folder instead of current directory
+7. Sort words by their level (0 to 3) from level 3 words (most usage) to level 0 words (least usage)
+ + Scrap word meanings to find if they consists of new words too, so put new words before them
+8. Having multiple dictionary support, we can try another dictionary if one doesn't have the word
+9. Online dictionaries limit queries, so we should have a delay between our queries (or bunch of queries)

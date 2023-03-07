@@ -8,7 +8,8 @@ from struct import unpack
 from json import dumps
 
 class w2a_db():
-    def __init__(self, address:str):
+    closed = False
+    def __init__(self, address:str, deckname:str):
         self.con = sqlite3.connect(address)
         self.con.execute('CREATE TABLE "cards" ( \
             "id"	integer, \
@@ -86,14 +87,20 @@ class w2a_db():
         self.con.execute('CREATE INDEX "ix_revlog_cid" ON "revlog" ("cid");')
         self.con.execute('CREATE INDEX "ix_revlog_usn" ON "revlog" ("usn");')
 
+        deck = build_deck(deckname)
+        conf = conf_default
+        conf['activeDecks'] = [deck['id']]
+        conf['curDeck'] = deck['id']
+        self.deckId = deck['id']
         self.con.execute('INSERT INTO "col"(crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-            [int(time()), int(time()*1000), int(time()*1000), 11, 0, 0, 0, dumps(conf_default), dumps(models_default), dumps(decks_default), dumps(dconf_default), '{}'])
+            [int(time()), int(time()*1000), int(time()*1000), 11, 0, 0, 0, dumps(conf_default), dumps(models_default), dumps(deck['decks']), dumps(deck['dconf']), '{}'])
     
     def insert_card(self, card:dict):
+        uid = int(time()*1000)
         self.con.execute('INSERT INTO "cards" (nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            [int(time()*1000), 1, 0, int(time()), -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '{}'])
+            [uid, self.deckId, 0, int(time()), -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '{}'])
         self.con.execute('INSERT INTO "notes" (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-            [int(time()*1000), str(uuid4()), mid_default, int(time()), -1, '', f"{card['headword']}\x1f{card['front']}\x1f{card['back']}", card['front'], 
+            [uid, str(uuid4()), mid_default, int(time()), -1, '', f"{card['headword']}\x1f{card['front']}\x1f{card['back']}", card['front'], 
                 unpack('L', sha1(card['front'].encode('utf8')).digest()[:4])[0], 0, ''])
         sleep(0.001) # 
         
@@ -104,6 +111,8 @@ class w2a_db():
     def close(self):
         self.con.commit()
         self.con.close()
+        self.closed = True
 
     def __del__(self):
-        self.close()
+        if not self.closed:
+            self.close()

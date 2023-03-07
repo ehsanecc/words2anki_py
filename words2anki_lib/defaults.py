@@ -1,3 +1,27 @@
+from time import time
+
+def build_deck(deckname:str, autoplay:bool =False):
+    deckId = int(time()*1000)
+    deckConfigId = deckId+1
+
+    # 1. dconf
+    dconf = dconf_default["1"]
+    dconf['autoplay'] = autoplay
+    dconf['id'] = deckConfigId
+    dconf['name'] = deckname
+
+    # 2. decks
+    decks = decks_default["1"]
+    decks['conf'] = deckConfigId
+    decks['name'] = deckname
+    decks['id'] = deckId
+
+    return {
+        'dconf':{str(deckConfigId):dconf},
+        'decks':{str(deckId):decks},
+        'id': deckId
+    }
+
 conf_default = {
     "activeDecks": [
         1
