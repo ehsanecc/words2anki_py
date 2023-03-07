@@ -9,8 +9,8 @@ from json import dumps
 
 class w2a_db():
     closed = False
-    def __init__(self, address:str, deckname:str):
-        self.con = sqlite3.connect(address)
+    def __init__(self, database, deckname:str):
+        self.con = sqlite3.connect(database)
         self.con.execute('CREATE TABLE "cards" ( \
             "id"	integer, \
             "nid"	integer NOT NULL, \

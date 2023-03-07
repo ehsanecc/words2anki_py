@@ -7,9 +7,10 @@ from os.path import exists, basename
 from os import remove
 from shutil import copy2
 from json import dumps
-from zipfile import ZipFile
+from zipfile import ZipFile, ZIP_BZIP2
 from glob import glob
 from time import sleep
+from io import BytesIO
 
 from words2anki_lib.database import w2a_db
 
@@ -26,13 +27,13 @@ defaultUrl = "https://www.ldoceonline.com/dictionary/"
 defaultUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0'
 delayParams = {'queries':30, 'delay':10, 'everyquery':0.5}
 
-def textify(e):
-    for element in e.select('a'): element.replace_with(element.text) # remove link
-    for element in e.select('.speaker'): element.replace_with() # remove speaker
-    for element in e.select('script'): element.replace_with() # remove scripts
+def remove_extra_by_selector(e:BeautifulSoup, selectors:list =['a', '.speaker', 'script', '.ACTIV,.BOX,.COMMENT,.FIELD,.HWD,.NOTE,.Noteprompt,.PICCAL,.PIC,.USAGE']):
+    for selector in selectors: # tags or classes
+        if selector == 'a':
+            for element in e.select(selector): element.replace_with(element.text) # remove link
+        else:
+            for element in e.select(selector): element.replace_with()
     # remove hidden (display : none)
-    # TODO: should extract from css file, not hardcoded!
-    for element in e.select('.ACTIV,.BOX,.COMMENT,.FIELD,.HWD,.NOTE,.Noteprompt,.PICCAL,.PIC,.USAGE'): element.replace_with() # remove scripts
 
 with open(args.words_file, "rt") as wordsFile:
     queryNum = 0
@@ -90,7 +91,7 @@ with open(args.words_file, "rt") as wordsFile:
                             word_info['mp3'] = filename.groups()[0]
                             fileList.append(word_info['mp3'])
                         mp3.close()
-            textify(head)
+            remove_extra_by_selector(head)
             word_info['front'] = '<span class="ldoceEntry Entry">' + "".join([str(i) for i in head]) + '</span>' + \
                 (f"[sound:{word_info['mp3']}]" if 'mp3' in word_info else '')
             head = entry.find("span", class_="Head")
@@ -99,8 +100,8 @@ with open(args.words_file, "rt") as wordsFile:
             if head.find("span", class_="PronCodes") != None:
                 word_info['pronunciation'] = head.find("span", class_="PronCodes").text.strip()
             entry_c = copy(entry)
-            textify(entry_c)
-            word_info['back'] = '<span class="ldoceEntry Entry">' + "".join(str(sense) for sense in entry_c.find_all("span", class_="Sense")) + '</span>'
+            remove_extra_by_selector(entry_c)
+            word_info['back'] = '<span class="ldoceEntry Entry">' + "\n".join(str(sense.prettify()) for sense in entry_c.find_all("span", class_="Sense")) + '</span>'
             wordDict[word].append(word_info)
             print(f"{len(wordDict):03} Processing {word} ... done" + ("(cached)" if cached else "" ) + (" "*10))
 
@@ -108,30 +109,26 @@ if len(wordDict) == 0:
     print("No words! exit")
     exit(1)
 
+
+apkg = ZipFile(f"{args.deck.replace(':', '_')}.apkg", "w", ZIP_BZIP2, compresslevel=9)
 # database
-if exists('temp/collection.anki21'):
-    remove('temp/collection.anki21')
-db = w2a_db("temp/collection.anki21", args.deck)
+db = w2a_db(':memory:', args.deck)
 for word in wordDict:
     for subword in wordDict[word]:
         db.insert_card(subword)
+apkg.writestr("collection.anki21", db.con.serialize())
 db.close()
 
-with open("temp/meta", "wb") as fo:
-    fo.write(b"\x08\x02")
-with open("temp/media", "wt") as fo:
-    index = 0
-    media = {}
-    print(fileList)
-    fileList = list(dict.fromkeys(fileList)) # remove duplicates
-    print(fileList)
-    for file in fileList:
-        print(f"copy {file} to {index}")
-        copy2(f"media/{file}", f"temp/{index}")
-        media[str(index)] = file
-        index += 1
-    fo.write(dumps(media))
-z = ZipFile(f"{args.deck}.apkg", "w")
-for f in glob("temp/*"):
-    z.write(f, arcname=basename(f))
-z.close()
+apkg.writestr("meta", b'\x08\x02')
+index = 0
+media = {}
+print(fileList)
+fileList = list(dict.fromkeys(fileList)) # remove duplicates
+print(fileList)
+for file in fileList:
+    print(f"copy {file} to {index}")
+    apkg.writestr(f"{index}", open(f"media/{file}", "rb").read())
+    media[str(index)] = file
+    index += 1
+apkg.writestr("media", dumps(media))
+apkg.close()
