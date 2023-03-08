@@ -55,7 +55,7 @@ models_default = {
                 "font": "Arial",
                 "name": "Headword",
                 "ord": 0,
-                "plainText": False,
+                "plainText": True,
                 "rtl": False,
                 "size": 20,
                 "sticky": False
@@ -81,6 +81,17 @@ models_default = {
                 "rtl": False,
                 "size": 20,
                 "sticky": False
+            },
+            {
+                "collapsed": False,
+                "description": "",
+                "font": "Arial",
+                "name": "TTSText",
+                "ord": 3,
+                "plainText": True,
+                "rtl": False,
+                "size": 20,
+                "sticky": False
             }
         ],
         "id": 1678093076416,
@@ -101,7 +112,7 @@ models_default = {
         "sortf": 1,
         "tmpls": [
             {
-                "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}\n{{tts en_US:Back}}",
+                "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}\n{{tts en_US:TTSText}}\n<br><a href=\"https://www.wordhippo.com/what-is/sentences-with-the-word/{{text:Headword}}.html\">More examples</a>",
                 "bafmt": "",
                 "bfont": "",
                 "bqfmt": "",
@@ -109,7 +120,7 @@ models_default = {
                 "did": None,
                 "name": "Card 1",
                 "ord": 0,
-                "qfmt": "{{Front}}"
+                "qfmt": "<b>{{Headword}}</b><br>{{Front}}"
             }
         ],
         "type": 0,

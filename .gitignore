@@ -1,8 +1,10 @@
 media/*
 sample
+words_minimal.txt
 words.txt
 .vscode
 **.pyc
 **/__pycache__
 cache/*
 **.apkg
+cache.*

@@ -100,7 +100,7 @@ class w2a_db():
         self.con.execute('INSERT INTO "cards" (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             [uid, uid, self.deckId, 0, int(time()), -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '{}'])
         self.con.execute('INSERT INTO "notes" (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-            [uid, str(uuid4()), mid_default, int(time()), -1, '', f"{card['headword']}\x1f{card['front']}\x1f{card['back']}", card['front'], 
+            [uid, str(uuid4()), mid_default, int(time()), -1, '', f"{card['headword']}\x1f{card['front']}\x1f{card['back']}\x1f{card['ttstext']}", card['front'], 
                 unpack('L', sha1(card['front'].encode('utf8')).digest()[:4])[0], 0, ''])
         sleep(0.001) # 
         
