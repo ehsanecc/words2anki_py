@@ -1,6 +1,6 @@
 from time import time
 
-def build_deck(deckname:str, autoplay:bool =False):
+def build_deck(deckname:str, autoplay:bool =True):
     deckId = int(time()*1000)
     deckConfigId = deckId+1
 
@@ -21,6 +21,14 @@ def build_deck(deckname:str, autoplay:bool =False):
         'decks':{str(deckId):decks},
         'id': deckId
     }
+
+def build_model(ttstype:str):
+    modelId = int(time()*1000)
+    model = models_default["1678093076416"]
+    model['tmpls'][0]['afmt'] = model['tmpls'][0]['afmt'] % ('<tts style="display: none" service="android" voice="en_US">{{TTSText}}</tts>' if ttstype == 'ankidroid' else '{{tts en_US:TTSText}}',)
+    model['id'] = modelId
+
+    return {str(modelId):model}
 
 conf_default = {
     "activeDecks": [
@@ -112,7 +120,7 @@ models_default = {
         "sortf": 1,
         "tmpls": [
             {
-                "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}\n{{tts en_US:TTSText}}\n<br><a href=\"https://www.wordhippo.com/what-is/sentences-with-the-word/{{text:Headword}}.html\">More examples</a>",
+                "afmt": "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}\n%s\n<br><a href=\"https://www.wordhippo.com/what-is/sentences-with-the-word/{{text:Headword}}.html\">More examples</a>",
                 "bafmt": "",
                 "bfont": "",
                 "bqfmt": "",
@@ -120,7 +128,7 @@ models_default = {
                 "did": None,
                 "name": "Card 1",
                 "ord": 0,
-                "qfmt": "<b>{{Headword}}</b><br>{{Front}}"
+                "qfmt": "meaning of <b>{{Headword}}</b>:<br>{{Front}}"
             }
         ],
         "type": 0,

@@ -9,7 +9,7 @@ from json import dumps
 
 class w2a_db():
     closed = False
-    def __init__(self, database, deckname:str):
+    def __init__(self, database, deckname:str, ttstype:str):
         self.con = sqlite3.connect(database)
         self.con.execute('CREATE TABLE "cards" ( \
             "id"	integer, \
@@ -87,20 +87,22 @@ class w2a_db():
         self.con.execute('CREATE INDEX "ix_revlog_cid" ON "revlog" ("cid");')
         self.con.execute('CREATE INDEX "ix_revlog_usn" ON "revlog" ("usn");')
 
+        model = build_model(ttstype)
+        self.modelId = list(model.keys())[0]
         deck = build_deck(deckname)
         conf = conf_default
         conf['activeDecks'] = [deck['id']]
         conf['curDeck'] = deck['id']
         self.deckId = deck['id']
         self.con.execute('INSERT INTO "col"(crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-            [int(time()), int(time()*1000), int(time()*1000), 11, 0, 0, 0, dumps(conf_default), dumps(models_default), dumps(deck['decks']), dumps(deck['dconf']), '{}'])
+            [int(time()), int(time()*1000), int(time()*1000), 11, 0, 0, 0, dumps(conf_default), dumps(model), dumps(deck['decks']), dumps(deck['dconf']), '{}'])
     
     def insert_card(self, card:dict):
         uid = int(time()*1000)
         self.con.execute('INSERT INTO "cards" (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             [uid, uid, self.deckId, 0, int(time()), -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '{}'])
         self.con.execute('INSERT INTO "notes" (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-            [uid, str(uuid4()), mid_default, int(time()), -1, '', f"{card['headword']}\x1f{card['front']}\x1f{card['back']}\x1f{card['ttstext']}", card['front'], 
+            [uid, str(uuid4()), self.modelId, int(time()), -1, '', f"{card['headword']}\x1f{card['front']}\x1f{card['back']}\x1f{card['ttstext']}", card['front'], 
                 unpack('L', sha1(card['front'].encode('utf8')).digest()[:4])[0], 0, ''])
         sleep(0.001) # 
         

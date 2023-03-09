@@ -20,6 +20,7 @@ argparser.add_argument("-n", "--name", type=str, help="Dictionary name")
 argparser.add_argument("-p", "--proxy", type=str, help="Set proxy for http(s) requests")
 argparser.add_argument("-d", "--deck", type=str, default="Default", help="Set deck name")
 argparser.add_argument("-c", "--cache", type=str, default="cache.zip", help="Cache file to use")
+argparser.add_argument("--ttstype", type=str, choices=['ankiweb','ankidroid','none'], default='ankidroid', help="Add Text To Speech for back card (meaning)")
 args = argparser.parse_args()
 
 wordDict = {}
@@ -35,6 +36,30 @@ def remove_extra_by_selector(e:Tag, selectors:list =['a', '.speaker', 'script', 
             for element in e.select(selector): element.replace_with()
     # remove hidden (display : none)
 
+def expand_refrences(e:BeautifulSoup, fetcher:DataFetcher):
+    expanded = False
+    baseUrl = fetcher.dictionaries[fetcher.currentDictionary]['baseUrl']
+    for cr in e.select("span.Crossref"):
+        expanded = True
+        href = f"{baseUrl}{cr.select('a.crossRef')[0].get('href')}"
+        word = re.match(r".*\/([^\/]+)$", href)
+        if word:
+            word = word.groups()[0]
+            html = fetcher.get(href, word, 'cache')
+            if html.ok and html.result:
+                html = BeautifulSoup(html.content, 'lxml')
+                for sense in html.find_all('span', class_='Sense'):
+                    # isense = copy(sense)
+                    # isense['class'] = None
+                    # isense['id'] = None
+                    # isense['style'] = 'display: block'
+                    # Crossref.append(isense)
+                    cr.append(BeautifulSoup('<br>', 'lxml').br)
+                    for child in sense: cr.append(copy(child))
+        cr.unwrap()
+
+    return expanded
+
 def tts_friendly(e:list[Tag]):
     text = []
     for span in e:
@@ -43,12 +68,45 @@ def tts_friendly(e:list[Tag]):
         for child in _span.children:
             if len(child.text) > 2:
                 s = child.text.replace('SYN', 'synonym')
-                s2 = re.sub(r'[^0-9a-zA-Z/\-,\.\\\'’:\(=\)\n ]', '', s)
+                s2 = re.sub(r'[^0-9a-zA-Z/\-,\.\\\'’:\(=\)\!\?\n ]', '', s)
                 s3 = re.sub(r"^\n", '', s2)
                 s4 = re.sub(r"^ ", "", s3)
                 text.append(s4.replace('\n', '.\n'))
 
-    return "." + ".\n".join(text).replace('  ', ' ').replace('..', '.') + "."
+    return (".\n".join(text).replace('  ', ' ') + ".").replace('..', '.')
+
+def sort_by_level(words:dict, reverse:bool=True):
+    level_word = []
+    for word in words:
+        if len(words[word]) == 0:
+            print("ERROR: empty card!", word, words[word])
+            exit()
+        level_word.append(f"{words[word][0]['level']}:{word}")
+    level_word.sort(reverse=reverse)
+
+    return {k.split(':')[1]:words[k.split(':')[1]] for k in level_word}
+
+def sort_by_words(words:dict):
+    words_in_words = {}
+    word_relatives = {}
+    for word in words:
+        words_in_words[word] = []
+        for wp in words[word]:
+            for w in wp['ttstext'].replace(' ', '.').replace('/', '.').replace('-', '.').split('.'):
+                w = w.strip().lower()
+                if len(w) > 2 and w not in words_in_words[word] and w != word:
+                    words_in_words[word].append(w)
+
+        # calculate relatives
+        word_relatives[word] = 0
+        for w in words_in_words[word]:
+            if w in words.keys():
+                word_relatives[word] += 1
+
+    words_relatives_ = [f"{word_relatives[wr]}:{wr}" for wr in word_relatives]
+    words_relatives_.sort()
+
+    return {k.split(':')[1]:words[k.split(':')[1]] for k in words_relatives_}
 
 with open(args.words_file, "rt") as wordsFile:
     fetcher = DataFetcher(args.cache, {'headers':{'User-agent':defaultUserAgent}, 'proxies':{'https':args.proxy}})
@@ -77,6 +135,13 @@ with open(args.words_file, "rt") as wordsFile:
         bs = BeautifulSoup(html_content, 'lxml')
         entry_content = bs.find("div", class_="entry_content")
         for entry in entry_content.select("span .ldoceEntry.Entry"):
+            if expand_refrences(entry, fetcher) and len(entry.find_all("span", class_="Sense")) == 0:
+                for PhrVbEntry in entry.find_all("span", class_="PhrVbEntry"):
+                    PhrVbEntry.span.span.unwrap()
+                    PhrVbEntry.span.unwrap()
+                    PhrVbEntry['class'].append('Sense') # expanded Entry!
+            if len(entry.find_all("span", class_="Sense")) == 0:
+                continue
             word_info = {'headword':word}
             head = copy(entry.find("span", class_="Head"))
             if len(head.select(".amefile")) > 0:
@@ -103,13 +168,17 @@ with open(args.words_file, "rt") as wordsFile:
             wordDict[word].append(word_info)
             print(f"{len(wordDict):03} Processing {word} ... done" + ("(cached)" if req.fromcache else "" ) + (" "*10))
 
+print("Sorting ...")
+wordDict = sort_by_words(wordDict)
+wordDict = sort_by_level(wordDict)
+
 if len(wordDict) == 0:
     print("No words! exit")
     exit(1)
 
 apkg = ZipFile(f"{args.deck.replace(':', '_')}.apkg", "w", ZIP_BZIP2, compresslevel=9)
 # database
-db = w2a_db(':memory:', args.deck)
+db = w2a_db(':memory:', args.deck, args.ttstype)
 for word in wordDict:
     for subword in wordDict[word]:
         db.insert_card(subword)
