@@ -16,17 +16,27 @@ from words2anki_lib.database import w2a_db
 
 argparser = ArgumentParser("Words2Anki Python Edition v1", "Give me a text file with a word in each line, I give you Anki package file :)")
 argparser.add_argument("words_file", type=str, help="Text file to read words from")
-argparser.add_argument("-n", "--name", type=str, help="Dictionary name")
-argparser.add_argument("-p", "--proxy", type=str, help="Set proxy for http(s) requests")
-argparser.add_argument("-d", "--deck", type=str, default="Default", help="Set deck name")
-argparser.add_argument("-c", "--cache", type=str, default="cache.zip", help="Cache file to use")
-argparser.add_argument("--ttstype", type=str, choices=['ankiweb','ankidroid','none'], default='ankidroid', help="Add Text To Speech for back card (meaning)")
+argparser.add_argument("-o", "--output", type=str, default=None, help="Output filename, default is '<deck name>_<ttstype>'")
+# argparser.add_argument("-n", "--name", type=str, help="Dictionary name")
+argparser.add_argument("-p", "--pronun", choices=['british', 'american'], default='american', type=str, help="Pornunciation type")
+argparser.add_argument("--proxy", type=str, help="Set proxy for http(s) requests")
+argparser.add_argument("-d", "--deck", type=str, default=None, help="Set deck name, default=<words_file> name")
+argparser.add_argument("-c", "--cache", type=str, default="cache.zip", help="Cache file to use, default=cache.zip")
+argparser.add_argument("-t", "--ttstype", type=str, choices=['ankiweb','ankidroid','none'], default='ankidroid', help="Add Text To Speech for back card (meaning)")
 args = argparser.parse_args()
 
 wordDict = {}
 fileList = []
 defaultUrl = "https://www.ldoceonline.com/dictionary/"
 defaultUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0'
+
+if args.deck == None:
+    args.deck = basename(args.words_file).split('.')[0]
+if args.output == None:
+    args.output = f"{re.sub(r'[^a-zA-Z0-9 ]', '_', args.deck)}_{args.ttstype}.apkg"
+elif not re.match(r".*\.apkg$", args.output):
+    args.output += ".apkg"
+args.pronunciation = {'american':'amefile', 'british':'brefile'}[args.pronun]
 
 def remove_extra_by_selector(e:Tag, selectors:list =['a', '.speaker', 'script', '.ACTIV,.BOX,.COMMENT,.FIELD,.HWD,.NOTE,.Noteprompt,.PICCAL,.PIC,.USAGE']):
     for selector in selectors: # tags or classes
@@ -66,14 +76,15 @@ def tts_friendly(e:list[Tag]):
         _span = copy(span)
         remove_extra_by_selector(_span, ['script', '.PronCodes'])
         for child in _span.children:
-            if len(child.text) > 2:
-                s = child.text.replace('SYN', 'synonym')
-                s2 = re.sub(r'[^0-9a-zA-Z/\-,\.\\\'’:\(=\)\!\?\n ]', '', s)
-                s3 = re.sub(r"^\n", '', s2)
-                s4 = re.sub(r"^ ", "", s3)
-                text.append(s4.replace('\n', '.\n'))
+            s = child.text.replace('SYN', 'synonym').replace('OPP', 'opposite')
+            s2 = re.sub(r'[^0-9a-zA-Z/\-,\.\\\'’£\$:\(=\)\!\?\n\+\* ]', '', s)
+            s3 = re.sub(r"^\n", '', s2)
+            s4 = re.sub(r"^ ", "", s3)
+            s5 = re.sub(r'\.([a-zA-Z])', '.\n\\1', s4.replace('\n', '.\n'))
+            if len(s4.replace('\n', '')):
+                text.append(s5)
 
-    return (".\n".join(text).replace('  ', ' ') + ".").replace('..', '.')
+    return re.sub(r"^ ?\.$", '' , (".\n".join(text).replace('  ', ' ') + ".").replace('..', '.'))
 
 def sort_by_level(words:dict, reverse:bool=True):
     level_word = []
@@ -92,7 +103,7 @@ def sort_by_words(words:dict):
     for word in words:
         words_in_words[word] = []
         for wp in words[word]:
-            for w in wp['ttstext'].replace(' ', '.').replace('/', '.').replace('-', '.').split('.'):
+            for w in re.sub('[^a-zA-Z]', '.', wp['ttstext']).split('.'):
                 w = w.strip().lower()
                 if len(w) > 2 and w not in words_in_words[word] and w != word:
                     words_in_words[word].append(w)
@@ -144,8 +155,8 @@ with open(args.words_file, "rt") as wordsFile:
                 continue
             word_info = {'headword':word}
             head = copy(entry.find("span", class_="Head"))
-            if len(head.select(".amefile")) > 0:
-                mp3_url = head.select(".amefile")[0]['data-src-mp3']
+            if len(head.select(f".{args.pronunciation}")) > 0:
+                mp3_url = head.select(f".{args.pronunciation}")[0]['data-src-mp3']
                 filename = re.match(r'.*\/([a-zA-Z0-9-]+\.mp3)\?.*', mp3_url)
                 if filename:
                     mp3 = fetcher.get(mp3_url, filename.groups()[0], 'media')
@@ -168,7 +179,7 @@ with open(args.words_file, "rt") as wordsFile:
             wordDict[word].append(word_info)
             print(f"{len(wordDict):03} Processing {word} ... done" + ("(cached)" if req.fromcache else "" ) + (" "*10))
 
-print("Sorting ...")
+print(f"Sorting {len(wordDict)} words ...")
 wordDict = sort_by_words(wordDict)
 wordDict = sort_by_level(wordDict)
 
@@ -176,7 +187,7 @@ if len(wordDict) == 0:
     print("No words! exit")
     exit(1)
 
-apkg = ZipFile(f"{args.deck.replace(':', '_')}.apkg", "w", ZIP_BZIP2, compresslevel=9)
+apkg = ZipFile(args.output, "w", ZIP_BZIP2, compresslevel=9)
 # database
 db = w2a_db(':memory:', args.deck, args.ttstype)
 for word in wordDict:

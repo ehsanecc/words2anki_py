@@ -8,3 +8,5 @@
  + Scrap word meanings to find if they consists of new words too, so put new words before them
 8. Having multiple dictionary support, we can try another dictionary if one doesn't have the word
 9. Online dictionaries limit queries, so we should have a delay between our queries (or bunch of queries)
+10. adding some sort of shuffle
+11. Add statistics and not found words and write it to a log file
