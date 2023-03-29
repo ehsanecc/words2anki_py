@@ -6,86 +6,16 @@ from bs4 import BeautifulSoup
 from hashlib import sha1
 from struct import unpack
 from json import dumps
+from os.path import dirname, sep
 
-class w2a_db():
+class W2ADatabase():
     closed = False
+    module_dir = dirname(__file__)
     def __init__(self, database, deckname:str, ttstype:str):
         self.con = sqlite3.connect(database)
-        self.con.execute('CREATE TABLE "cards" ( \
-            "id"	integer, \
-            "nid"	integer NOT NULL, \
-            "did"	integer NOT NULL, \
-            "ord"	integer NOT NULL, \
-            "mod"	integer NOT NULL, \
-            "usn"	integer NOT NULL, \
-            "type"	integer NOT NULL, \
-            "queue"	integer NOT NULL, \
-            "due"	integer NOT NULL, \
-            "ivl"	integer NOT NULL, \
-            "factor"	integer NOT NULL, \
-            "reps"	integer NOT NULL, \
-            "lapses"	integer NOT NULL, \
-            "left"	integer NOT NULL, \
-            "odue"	integer NOT NULL, \
-            "odid"	integer NOT NULL, \
-            "flags"	integer NOT NULL, \
-            "data"	text NOT NULL, \
-            PRIMARY KEY("id") \
-        );')
-        self.con.execute('CREATE TABLE "col" (\
-            "id"	integer,\
-            "crt"	integer NOT NULL,\
-            "mod"	integer NOT NULL,\
-            "scm"	integer NOT NULL,\
-            "ver"	integer NOT NULL,\
-            "dty"	integer NOT NULL,\
-            "usn"	integer NOT NULL,\
-            "ls"	integer NOT NULL,\
-            "conf"	text NOT NULL,\
-            "models"	text NOT NULL,\
-            "decks"	text NOT NULL,\
-            "dconf"	text NOT NULL,\
-            "tags"	text NOT NULL,\
-            PRIMARY KEY("id")\
-        );')
-        self.con.execute('CREATE TABLE "graves" (\
-            "usn"	integer NOT NULL,\
-            "oid"	integer NOT NULL,\
-            "type"	integer NOT NULL\
-        );')
-        self.con.execute('CREATE TABLE "notes" (\
-            "id"	integer,\
-            "guid"	text NOT NULL,\
-            "mid"	integer NOT NULL,\
-            "mod"	integer NOT NULL,\
-            "usn"	integer NOT NULL,\
-            "tags"	text NOT NULL,\
-            "flds"	text NOT NULL,\
-            "sfld"	integer NOT NULL,\
-            "csum"	integer NOT NULL,\
-            "flags"	integer NOT NULL,\
-            "data"	text NOT NULL,\
-            PRIMARY KEY("id")\
-        );')
-        self.con.execute('CREATE TABLE "revlog" (\
-            "id"	integer,\
-            "cid"	integer NOT NULL,\
-            "usn"	integer NOT NULL,\
-            "ease"	integer NOT NULL,\
-            "ivl"	integer NOT NULL,\
-            "lastIvl"	integer NOT NULL,\
-            "factor"	integer NOT NULL,\
-            "time"	integer NOT NULL,\
-            "type"	integer NOT NULL,\
-            PRIMARY KEY("id")\
-        );')
-        self.con.execute('CREATE INDEX "ix_cards_nid" ON "cards" ("nid");')
-        self.con.execute('CREATE INDEX "ix_cards_sched" ON "cards" ("did","queue","due");')
-        self.con.execute('CREATE INDEX "ix_cards_usn" ON "cards" ("usn");')
-        self.con.execute('CREATE INDEX "ix_notes_csum" ON "notes" ("csum");')
-        self.con.execute('CREATE INDEX "ix_notes_usn" ON "notes" ("usn");')
-        self.con.execute('CREATE INDEX "ix_revlog_cid" ON "revlog" ("cid");')
-        self.con.execute('CREATE INDEX "ix_revlog_usn" ON "revlog" ("usn");')
+        with open(f"{__file__[0:-3]}.sql", 'rb') as queries:
+            for query in queries.read().decode('utf-8').replace('\r', '').split(';\n'):
+                self.con.execute(query)
 
         model = build_model(ttstype)
         self.modelId = list(model.keys())[0]

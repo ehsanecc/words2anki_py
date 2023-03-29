@@ -10,9 +10,10 @@ from zipfile import ZipFile, ZIP_BZIP2
 from glob import glob
 from time import sleep
 from io import BytesIO
+from random import shuffle
 from words2anki_lib.fetcher import DataFetcher
 
-from words2anki_lib.database import w2a_db
+from words2anki_lib.database import W2ADatabase
 
 argparser = ArgumentParser("Words2Anki Python Edition v1", "Give me a text file with a word in each line, I give you Anki package file :)")
 argparser.add_argument("words_file", type=str, help="Text file to read words from")
@@ -23,6 +24,7 @@ argparser.add_argument("--proxy", type=str, help="Set proxy for http(s) requests
 argparser.add_argument("-d", "--deck", type=str, default=None, help="Set deck name, default=<words_file> name")
 argparser.add_argument("-c", "--cache", type=str, default="cache.zip", help="Cache file to use, default=cache.zip")
 argparser.add_argument("-t", "--ttstype", type=str, choices=['ankiweb','ankidroid','none'], default='ankidroid', help="Add Text To Speech for back card (meaning)")
+argparser.add_argument("--shuffle", action='store_true', help="Shuffle words list")
 args = argparser.parse_args()
 
 wordDict = {}
@@ -44,7 +46,8 @@ def remove_extra_by_selector(e:Tag, selectors:list =['a', '.speaker', 'script', 
             for element in e.select(selector): element.replace_with(element.text) # remove link
         else:
             for element in e.select(selector): element.replace_with()
-    # remove hidden (display : none)
+    # remove hidden (display: none)
+    for element in e.select('[style*="display: none"]'): element.replace_with()
 
 def expand_refrences(e:BeautifulSoup, fetcher:DataFetcher):
     expanded = False
@@ -59,11 +62,6 @@ def expand_refrences(e:BeautifulSoup, fetcher:DataFetcher):
             if html.ok and html.result:
                 html = BeautifulSoup(html.content, 'lxml')
                 for sense in html.find_all('span', class_='Sense'):
-                    # isense = copy(sense)
-                    # isense['class'] = None
-                    # isense['id'] = None
-                    # isense['style'] = 'display: block'
-                    # Crossref.append(isense)
                     cr.append(BeautifulSoup('<br>', 'lxml').br)
                     for child in sense: cr.append(copy(child))
         cr.unwrap()
@@ -120,26 +118,37 @@ def sort_by_words(words:dict):
     return {k.split(':')[1]:words[k.split(':')[1]] for k in words_relatives_}
 
 with open(args.words_file, "rt") as wordsFile:
+    summary = {'notFound':[], 'error':[], 'fromCache':[], 'skipped':{}}
     fetcher = DataFetcher(args.cache, {'headers':{'User-agent':defaultUserAgent}, 'proxies':{'https':args.proxy}})
     queryNum = 0
-    for word in wordsFile.read().splitlines():
+    words = wordsFile.read().splitlines()
+    if args.shuffle: shuffle(words)
+    for word in words:
         word = word.strip()
         if len(word) < 2:
             print(f"Word is too small: {word}")
             continue
         if word in wordDict.keys():
             print(f"Processing {word} ... exists, skip")
+            if word in summary['skipped']:
+                summary['skipped'][word] += 1
+            else:
+                summary['skipped'][word] = 1
             continue
         
         print(f"Processing {word} ... getting html", end='\r')
         req = fetcher.get(f"{defaultUrl}{word}", word, 'cache')
         if not req.ok:
             print(f"Processing {word} ... error", end='\r')
+            summary['error'].append(word)
             continue
         if not req.result:
             print(f"Processing {word} ... not found, skip")
+            summary['notFound'].append(word)
             continue
         html_content = req.content
+        if req.fromcache:
+            summary['fromCache'].append(word)
 
         print(f"Processing {word} ... parsing html", end='\r')
         wordDict[word] = []
@@ -189,7 +198,7 @@ if len(wordDict) == 0:
 
 apkg = ZipFile(args.output, "w", ZIP_BZIP2, compresslevel=9)
 # database
-db = w2a_db(':memory:', args.deck, args.ttstype)
+db = W2ADatabase(':memory:', args.deck, args.ttstype)
 for word in wordDict:
     for subword in wordDict[word]:
         db.insert_card(subword)
@@ -207,3 +216,15 @@ for file in fileList:
     index += 1
 apkg.writestr("media", dumps(media))
 apkg.close()
+
+print("Summary:"\
+    f"\n\tNot Found: {len(summary['notFound'])}"\
+    f"\n\tFrom Cache: {len(summary['fromCache'])}"\
+    f"\n\tError: {len(summary['error'])}"\
+    f"\n\tSkipped: {len(summary['skipped'])}\n")
+for category in list(summary.keys()):
+    words = list(summary[category].keys()) if type(summary[category]) == dict else summary[category]
+    if len(words) > 0 and category != 'fromCache':
+        print(f"[{category}]")
+        for word in words:
+            print(f" {word}")
