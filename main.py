@@ -88,9 +88,10 @@ def sort_by_level(words:dict, reverse:bool=True):
     level_word = []
     for word in words:
         if len(words[word]) == 0:
-            print("ERROR: empty card!", word, words[word])
-            exit()
-        level_word.append(f"{words[word][0]['level']}:{word}")
+            print("WARNING: Empty card!", word, words[word])
+            # probably because it's business dictionary
+        else:
+            level_word.append(f"{words[word][0]['level']}:{word}")
     level_word.sort(reverse=reverse)
 
     return {k.split(':')[1]:words[k.split(':')[1]] for k in level_word}

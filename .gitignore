@@ -7,3 +7,5 @@ words*.txt
 cache/*
 cache.*
 **.apkg
+command.bat
+result_ptebasic.txt
